@@ -70,18 +70,15 @@ if brastemp_file and electrolux_file:
 
     # === 추가 기능 2: USP 분석 요약 ===
     with st.expander("📌 USP 분석 결과 요약 (Azure OpenAI 기반)"):
-        openai_api_key = st.secrets["AZURE_OPENAI_KEY"] if "AZURE_OPENAI_KEY" in st.secrets else None
-        openai_api_base = st.secrets["AZURE_OPENAI_BASE"] if "AZURE_OPENAI_BASE" in st.secrets else None
-        openai_api_version = st.secrets["AZURE_OPENAI_VERSION"] if "AZURE_OPENAI_VERSION" in st.secrets else "2023-05-15"
-        deployment_name = st.secrets["AZURE_OPENAI_DEPLOYMENT"] if "AZURE_OPENAI_DEPLOYMENT" in st.secrets else "gpt-4"
-
-        if not openai_api_key or not openai_api_base:
-            st.warning("Azure OpenAI API 키 또는 BASE URL이 설정되지 않았습니다. `.streamlit/secrets.toml`에 키를 등록하세요.")
+        required_keys = ["AZURE_API_KEY", "AZURE_ENDPOINT", "DEPLOYMENT_NAME"]
+        if not all(k in st.secrets for k in required_keys):
+            st.warning("Azure OpenAI 설정이 누락되었습니다. `.streamlit/secrets.toml`에 AZURE_API_KEY, AZURE_ENDPOINT, DEPLOYMENT_NAME를 추가하세요.")
         else:
             openai.api_type = "azure"
-            openai.api_key = openai_api_key
-            openai.api_base = openai_api_base
-            openai.api_version = openai_api_version
+            openai.api_key = st.secrets["AZURE_API_KEY"]
+            openai.api_base = st.secrets["AZURE_ENDPOINT"]
+            openai.api_version = "2023-05-15"
+            deployment_name = st.secrets["DEPLOYMENT_NAME"]
 
             prompt = f"""
             다음은 Brastemp 및 Electrolux의 냉장고 제품의 USP 목록입니다.
