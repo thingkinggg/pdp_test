@@ -3,7 +3,9 @@ import pandas as pd
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 import json
-import openai
+from langchain.prompts import PromptTemplate
+from langchain.chains import LLMChain
+from langchain_openai import AzureChatOpenAI
 
 st.set_page_config(page_title="PDP USP Matcher", layout="wide")
 
@@ -70,29 +72,32 @@ if brastemp_file and electrolux_file:
 
     # === 추가 기능 2: USP 분석 요약 ===
     with st.expander("📌 USP 분석 결과 요약 (Azure OpenAI 기반)"):
-        
-        openai.api_type = "azure"
-        openai.api_key = st.secrets["AZURE_OPENAI_KEY"]
-        openai.api_base = st.secrets["AZURE_ENDPOINT"]
-        openai.api_version = "2023-05-15"
-        deployment_name = st.secrets["DEPLOYMENT_NAME"]
+        required_keys = ["AZURE_API_KEY", "AZURE_ENDPOINT", "DEPLOYMENT_NAME"]
+        if not all(k in st.secrets for k in required_keys):
+            st.warning("Azure OpenAI 설정이 누락되었습니다. `.streamlit/secrets.toml`에 AZURE_API_KEY, AZURE_ENDPOINT, DEPLOYMENT_NAME를 추가하세요.")
+        else:
+            openai.api_type = "azure"
+            openai.api_key = st.secrets["AZURE_API_KEY"]
+            openai.api_base = st.secrets["AZURE_ENDPOINT"]
+            openai.api_version = "2023-05-15"
+            deployment_name = st.secrets["DEPLOYMENT_NAME"]
 
-        prompt = f"""
-        다음은 Brastemp 및 Electrolux의 냉장고 제품의 USP 목록입니다.
-        Brastemp:
-        {br_row['usp_details']}
+            prompt = f"""
+            다음은 Brastemp 및 Electrolux의 냉장고 제품의 USP 목록입니다.
+            Brastemp:
+            {br_row['usp_details']}
 
-        Electrolux:
-        {el_row['usp_details']}
+            Electrolux:
+            {el_row['usp_details']}
 
-        이 두 제품의 특징을 비교해주시고, 어떤 차별점이 있는지 요약해 주세요. 
-        """
+            이 두 제품의 특징을 비교해주시고, 어떤 차별점이 있는지 요약해 주세요. 
+            """
 
-        response = openai.ChatCompletion.create(
-            engine=deployment_name,
-            messages=[{"role": "user", "content": prompt}]
-        )
+            response = openai.ChatCompletion.create(
+                engine=deployment_name,
+                messages=[{"role": "user", "content": prompt}]
+            )
 
-        st.markdown(response["choices"][0]["message"]["content"])
+            st.markdown(response["choices"][0]["message"]["content"])
 else:
     st.info("좌측 사이드바에서 Brastemp, Electrolux 데이터를 업로드하세요.")
