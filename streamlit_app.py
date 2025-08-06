@@ -3,6 +3,7 @@ import pandas as pd
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 import json
+import openai
 
 st.set_page_config(page_title="PDP USP Matcher", layout="wide")
 
@@ -24,7 +25,7 @@ if brastemp_file and electrolux_file:
     # 제품 선택
     selected_brastemp = st.selectbox("🔎 Brastemp 제품 선택", brastemp_df['product_name'].unique())
     br_row = brastemp_df[brastemp_df['product_name'] == selected_brastemp].iloc[0]
-    
+
     # TF-IDF 유사도 기반 Electrolux 매칭
     def find_best_match(base_text, candidates):
         vectorizer = TfidfVectorizer().fit([base_text] + candidates)
@@ -53,7 +54,7 @@ if brastemp_file and electrolux_file:
         st.write(el_row['usp_details'])
 
     st.divider()
-    
+
     # === 추가 기능 1: SPEC 비교 ===
     with st.expander("🔍 제품 SPEC 비교"):
         br_specs = json.loads(br_row['specs'])
@@ -68,17 +69,19 @@ if brastemp_file and electrolux_file:
         st.dataframe(pd.DataFrame(spec_data))
 
     # === 추가 기능 2: USP 분석 요약 ===
-    with st.expander("📌 USP 분석 결과 요약 (LLM 기반)"):
-        from openai import OpenAI
-        import os
+    with st.expander("📌 USP 분석 결과 요약 (Azure OpenAI 기반)"):
+        openai_api_key = st.secrets["AZURE_OPENAI_KEY"] if "AZURE_OPENAI_KEY" in st.secrets else None
+        openai_api_base = st.secrets["AZURE_OPENAI_BASE"] if "AZURE_OPENAI_BASE" in st.secrets else None
+        openai_api_version = st.secrets["AZURE_OPENAI_VERSION"] if "AZURE_OPENAI_VERSION" in st.secrets else "2023-05-15"
+        deployment_name = st.secrets["AZURE_OPENAI_DEPLOYMENT"] if "AZURE_OPENAI_DEPLOYMENT" in st.secrets else "gpt-4"
 
-        openai_api_key = st.secrets["OPENAI_API_KEY"] if "OPENAI_API_KEY" in st.secrets else None
-
-        if not openai_api_key:
-            st.warning("OpenAI API 키가 설정되지 않았습니다. `.streamlit/secrets.toml`에 키를 등록하세요.")
+        if not openai_api_key or not openai_api_base:
+            st.warning("Azure OpenAI API 키 또는 BASE URL이 설정되지 않았습니다. `.streamlit/secrets.toml`에 키를 등록하세요.")
         else:
-            import openai
+            openai.api_type = "azure"
             openai.api_key = openai_api_key
+            openai.api_base = openai_api_base
+            openai.api_version = openai_api_version
 
             prompt = f"""
             다음은 Brastemp 및 Electrolux의 냉장고 제품의 USP 목록입니다.
@@ -92,7 +95,7 @@ if brastemp_file and electrolux_file:
             """
 
             response = openai.ChatCompletion.create(
-                model="gpt-4o",
+                engine=deployment_name,
                 messages=[{"role": "user", "content": prompt}]
             )
 
