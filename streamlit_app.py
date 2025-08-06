@@ -76,10 +76,11 @@ if brastemp_file and electrolux_file:
 
         # LangChain LLM 설정
         llm = AzureChatOpenAI(
-                api_key="e80449f0e6f345bf8311a3f48004f3ba",
-                azure_endpoint="https://dhnp.openai.azure.com/",
-                deployment_name="gpt-4o",
-                temperature=0.3
+            openai_api_key="e80449f0e6f345bf8311a3f48004f3ba",
+            azure_endpoint="https://dhnp.openai.azure.com/",
+            deployment_name="gpt-4o",
+            api_version="2024-02-01",
+            temperature=0
             )
 
         template = """
