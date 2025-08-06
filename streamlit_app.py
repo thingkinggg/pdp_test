@@ -21,12 +21,11 @@ def show_usp_comparison(product_name, brastemp_df, electrolux_df):
     st.write("### PDP 문구 비교 분석")
 
     def extract_usp_text(df, brand):
-        row = df[df['product_name'].str.contains(product_name, case=False, na=False)]
-        if row.empty:
-            return "(데이터 없음)", ""
-        usp_raw = row.iloc[0]['usp_details']
-        usp_list = usp_raw.split(";")
-        return f"\n".join(usp_list), row.iloc[0]['product_name']
+        row = df[df['product_name'].str.contains(product_name, case=False, na=False, regex=False)]
+        if not row.empty:
+            text = row.iloc[0]['usp_details']
+            return text, brand
+        return "", brand
 
     b_text, b_title = extract_usp_text(brastemp_df, 'Brastemp')
     e_text, e_title = extract_usp_text(electrolux_df, 'Electrolux')
