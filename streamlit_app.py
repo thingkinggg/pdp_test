@@ -1,83 +1,101 @@
 import streamlit as st
 import pandas as pd
-import json
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
+import json
 
-# Load data
-def load_data():
-    brastemp_df = pd.read_parquet("Brastemp_products_info.parquet")
-    electrolux_df = pd.read_parquet("electrolux_products_info.parquet")
-    return brastemp_df, electrolux_df
+st.set_page_config(page_title="PDP USP Matcher", layout="wide")
 
-def display_product_summary(df):
-    st.write("### 요약 통계")
-    st.write("브랜드 분포:")
-    st.write(df['brand'].value_counts())
-    st.write("카테고리 분포:")
-    st.write(df['categories'].value_counts().head(10))
+# === 파일 업로드 ===
+st.sidebar.header("데이터 업로드")
+brastemp_file = st.sidebar.file_uploader("Brastemp Parquet 파일", type=["parquet"])
+electrolux_file = st.sidebar.file_uploader("Electrolux Parquet 파일", type=["parquet"])
 
-def show_usp_comparison(product_name, brastemp_df, electrolux_df):
-    st.write("### PDP 문구 비교 분석")
+@st.cache_data
+def load_data(file):
+    return pd.read_parquet(file)
 
-    def extract_usp_text(df, brand):
-        row = df[df['product_name'].str.contains(product_name, case=False, na=False, regex=False)]
-        if not row.empty:
-            text = row.iloc[0]['usp_details']
-            return text, brand
-        return "", brand
+if brastemp_file and electrolux_file:
+    brastemp_df = load_data(brastemp_file)
+    electrolux_df = load_data(electrolux_file)
 
-    b_text, b_title = extract_usp_text(brastemp_df, 'Brastemp')
-    e_text, e_title = extract_usp_text(electrolux_df, 'Electrolux')
+    st.success("✅ 데이터 로드 완료")
+
+    # 제품 선택
+    selected_brastemp = st.selectbox("🔎 Brastemp 제품 선택", brastemp_df['product_name'].unique())
+    br_row = brastemp_df[brastemp_df['product_name'] == selected_brastemp].iloc[0]
+    
+    # TF-IDF 유사도 기반 Electrolux 매칭
+    def find_best_match(base_text, candidates):
+        vectorizer = TfidfVectorizer().fit([base_text] + candidates)
+        tfidf = vectorizer.transform([base_text] + candidates)
+        scores = cosine_similarity(tfidf[0:1], tfidf[1:]).flatten()
+        best_idx = scores.argmax()
+        return best_idx, scores[best_idx]
+
+    el_idx, sim_score = find_best_match(br_row['usp_details'], electrolux_df['usp_details'].tolist())
+    el_row = electrolux_df.iloc[el_idx]
 
     col1, col2 = st.columns(2)
     with col1:
-        st.subheader(f"Brastemp - {b_title}")
-        st.text(b_text)
+        st.subheader("🥇 Brastemp 제품")
+        st.markdown(f"**제품명:** {br_row['product_name']}")
+        st.markdown(f"**가격:** R${br_row['price']:,}")
+        st.markdown("**USP 목록:**")
+        st.write(br_row['usp_details'])
+
     with col2:
-        st.subheader(f"Electrolux - {e_title}")
-        st.text(e_text)
+        st.subheader("🤖 가장 유사한 Electrolux 제품")
+        st.markdown(f"**제품명:** {el_row['product_name']}")
+        st.markdown(f"**가격:** R${el_row['price']:,}")
+        st.markdown(f"**유사도 점수:** {sim_score:.2f}")
+        st.markdown("**USP 목록:**")
+        st.write(el_row['usp_details'])
 
-    # Simple similarity comparison
-    if b_text.strip() and e_text.strip():
-        vectorizer = TfidfVectorizer().fit_transform([b_text, e_text])
-        sim_score = cosine_similarity(vectorizer[0:1], vectorizer[1:2])[0][0]
-        st.success(f"🔍 USP 유사도 분석 결과: {sim_score:.2f} (cosine similarity)")
-
-# === Streamlit UI ===
-st.set_page_config(page_title="PDP USP 분석 도구", layout="wide")
-st.title("📊 브라질 냉장고 PDP USP 분석 대시보드")
-
-brastemp_df, electrolux_df = load_data()
-
-# 탭 구성
-selected_tab = st.sidebar.radio("기능 선택", ["요약 보기", "제품별 USP 비교", "기능 추천 (추가)", "데이터 보기"])
-
-if selected_tab == "요약 보기":
-    st.header("✅ 데이터 요약")
-    display_product_summary(pd.concat([brastemp_df, electrolux_df], axis=0))
-
-elif selected_tab == "제품별 USP 비교":
-    st.header("🔍 제품명으로 PDP USP 비교")
-    all_names = list(brastemp_df['product_name'].dropna().unique()) + list(electrolux_df['product_name'].dropna().unique())
-    selected_name = st.selectbox("제품명 키워드 입력 또는 선택", sorted(set(all_names)))
-    if selected_name:
-        show_usp_comparison(selected_name, brastemp_df, electrolux_df)
-
-elif selected_tab == "기능 추천 (추가)":
-    st.header("✨ LLM 기반 추천 기능")
-    selected_row = st.selectbox("Brastemp 제품 중 하나 선택", brastemp_df['product_name'])
-    selected_usp = brastemp_df[brastemp_df['product_name'] == selected_row]['usp_details'].values[0]
-    st.markdown("#### 선택한 제품의 USP:")
-    st.text(selected_usp)
+    st.divider()
     
-    st.markdown("#### 🤖 LLM 분석 결과 (예시):")
-    st.info("이 제품은 물 디스펜서, Blue Touch 온도 조절, 유연한 선반 구조를 통해 사용 편의성과 실용성을 강조하고 있습니다. 경쟁사 제품 대비 디스펜서 기능이 더 강조되어 있음.")
+    # === 추가 기능 1: SPEC 비교 ===
+    with st.expander("🔍 제품 SPEC 비교"):
+        br_specs = json.loads(br_row['specs'])
+        el_specs = json.loads(el_row['specs'])
+        spec_keys = sorted(set(br_specs.keys()).union(el_specs.keys()))
 
-elif selected_tab == "데이터 보기":
-    st.header("🧾 원본 데이터 보기")
-    brand_choice = st.radio("브랜드 선택", ["Brastemp", "Electrolux"])
-    if brand_choice == "Brastemp":
-        st.dataframe(brastemp_df)
-    else:
-        st.dataframe(electrolux_df)
+        spec_data = {
+            "항목": spec_keys,
+            "Brastemp": [br_specs.get(k, "") for k in spec_keys],
+            "Electrolux": [el_specs.get(k, "") for k in spec_keys]
+        }
+        st.dataframe(pd.DataFrame(spec_data))
+
+    # === 추가 기능 2: USP 분석 요약 ===
+    with st.expander("📌 USP 분석 결과 요약 (LLM 기반)"):
+        from openai import OpenAI
+        import os
+
+        openai_api_key = st.secrets["OPENAI_API_KEY"] if "OPENAI_API_KEY" in st.secrets else None
+
+        if not openai_api_key:
+            st.warning("OpenAI API 키가 설정되지 않았습니다. `.streamlit/secrets.toml`에 키를 등록하세요.")
+        else:
+            import openai
+            openai.api_key = openai_api_key
+
+            prompt = f"""
+            다음은 Brastemp 및 Electrolux의 냉장고 제품의 USP 목록입니다.
+            Brastemp:
+            {br_row['usp_details']}
+
+            Electrolux:
+            {el_row['usp_details']}
+
+            이 두 제품의 특징을 비교해주시고, 어떤 차별점이 있는지 요약해 주세요. 
+            """
+
+            response = openai.ChatCompletion.create(
+                model="gpt-4o",
+                messages=[{"role": "user", "content": prompt}]
+            )
+
+            st.markdown(response["choices"][0]["message"]["content"])
+else:
+    st.info("좌측 사이드바에서 Brastemp, Electrolux 데이터를 업로드하세요.")
