@@ -1,8 +1,8 @@
 import streamlit as st
 import pandas as pd
+import json
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
-import json
 from langchain.prompts import PromptTemplate
 from langchain.chains import LLMChain
 from langchain_openai import AzureChatOpenAI
@@ -39,6 +39,7 @@ if brastemp_file and electrolux_file:
     el_idx, sim_score = find_best_match(br_row['usp_details'], electrolux_df['usp_details'].tolist())
     el_row = electrolux_df.iloc[el_idx]
 
+    # 제품 비교 UI
     col1, col2 = st.columns(2)
     with col1:
         st.subheader("🥇 Brastemp 제품")
@@ -57,12 +58,11 @@ if brastemp_file and electrolux_file:
 
     st.divider()
 
-    # === 추가 기능 1: SPEC 비교 ===
+    # === 기능 1: SPEC 비교 ===
     with st.expander("🔍 제품 SPEC 비교"):
         br_specs = json.loads(br_row['specs'])
         el_specs = json.loads(el_row['specs'])
         spec_keys = sorted(set(br_specs.keys()).union(el_specs.keys()))
-
         spec_data = {
             "항목": spec_keys,
             "Brastemp": [br_specs.get(k, "") for k in spec_keys],
@@ -70,34 +70,40 @@ if brastemp_file and electrolux_file:
         }
         st.dataframe(pd.DataFrame(spec_data))
 
-    # === 추가 기능 2: USP 분석 요약 ===
+    # === 기능 2: USP 요약 (LangChain + Azure OpenAI)
     with st.expander("📌 USP 분석 결과 요약 (Azure OpenAI 기반)"):
         required_keys = ["AZURE_API_KEY", "AZURE_ENDPOINT", "DEPLOYMENT_NAME"]
         if not all(k in st.secrets for k in required_keys):
             st.warning("Azure OpenAI 설정이 누락되었습니다. `.streamlit/secrets.toml`에 AZURE_API_KEY, AZURE_ENDPOINT, DEPLOYMENT_NAME를 추가하세요.")
         else:
-            openai.api_type = "azure"
-            openai.api_key = st.secrets["AZURE_API_KEY"]
-            openai.api_base = st.secrets["AZURE_ENDPOINT"]
-            openai.api_version = "2023-05-15"
-            deployment_name = st.secrets["DEPLOYMENT_NAME"]
-
-            prompt = f"""
-            다음은 Brastemp 및 Electrolux의 냉장고 제품의 USP 목록입니다.
-            Brastemp:
-            {br_row['usp_details']}
-
-            Electrolux:
-            {el_row['usp_details']}
-
-            이 두 제품의 특징을 비교해주시고, 어떤 차별점이 있는지 요약해 주세요. 
-            """
-
-            response = openai.ChatCompletion.create(
-                engine=deployment_name,
-                messages=[{"role": "user", "content": prompt}]
+            # LangChain LLM 설정
+            llm = AzureChatOpenAI(
+                openai_api_key=st.secrets["AZURE_API_KEY"],
+                azure_endpoint=st.secrets["AZURE_ENDPOINT"],
+                deployment_name=st.secrets["DEPLOYMENT_NAME"],
+                temperature=0.3
             )
 
-            st.markdown(response["choices"][0]["message"]["content"])
+            template = """
+            다음은 Brastemp 및 Electrolux의 냉장고 제품의 USP 목록입니다.
+            Brastemp:
+            {br_usp}
+
+            Electrolux:
+            {el_usp}
+
+            두 제품의 특징을 비교하고, 주요 차이점을 요약해 주세요. 
+            """
+            prompt = PromptTemplate(
+                input_variables=["br_usp", "el_usp"],
+                template=template.strip()
+            )
+
+            chain = LLMChain(llm=llm, prompt=prompt)
+            summary = chain.run(br_usp=br_row['usp_details'], el_usp=el_row['usp_details'])
+
+            st.markdown("### ✅ 요약 결과")
+            st.write(summary)
+
 else:
     st.info("좌측 사이드바에서 Brastemp, Electrolux 데이터를 업로드하세요.")
