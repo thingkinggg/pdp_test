@@ -73,18 +73,16 @@ if brastemp_file and electrolux_file:
     # === 기능 2: USP 요약 (LangChain + Azure OpenAI)
     with st.expander("📌 USP 분석 결과 요약 (Azure OpenAI 기반)"):
         required_keys = ["AZURE_API_KEY", "AZURE_ENDPOINT", "DEPLOYMENT_NAME"]
-        if not all(k in st.secrets for k in required_keys):
-            st.warning("Azure OpenAI 설정이 누락되었습니다. `.streamlit/secrets.toml`에 AZURE_API_KEY, AZURE_ENDPOINT, DEPLOYMENT_NAME를 추가하세요.")
-        else:
-            # LangChain LLM 설정
-            llm = AzureChatOpenAI(
-                openai_api_key=st.secrets["AZURE_API_KEY"],
-                azure_endpoint=st.secrets["AZURE_ENDPOINT"],
-                deployment_name=st.secrets["DEPLOYMENT_NAME"],
+
+        # LangChain LLM 설정
+        llm = AzureChatOpenAI(
+                openai_api_key="e80449f0e6f345bf8311a3f48004f3ba",
+                azure_endpoint="https://dhnp.openai.azure.com/",
+                deployment_name="gpt-4o",
                 temperature=0.3
             )
 
-            template = """
+        template = """
             다음은 Brastemp 및 Electrolux의 냉장고 제품의 USP 목록입니다.
             Brastemp:
             {br_usp}
@@ -94,16 +92,16 @@ if brastemp_file and electrolux_file:
 
             두 제품의 특징을 비교하고, 주요 차이점을 요약해 주세요. 
             """
-            prompt = PromptTemplate(
+        prompt = PromptTemplate(
                 input_variables=["br_usp", "el_usp"],
                 template=template.strip()
             )
 
-            chain = LLMChain(llm=llm, prompt=prompt)
-            summary = chain.run(br_usp=br_row['usp_details'], el_usp=el_row['usp_details'])
+        chain = LLMChain(llm=llm, prompt=prompt)
+        summary = chain.run(br_usp=br_row['usp_details'], el_usp=el_row['usp_details'])
 
-            st.markdown("### ✅ 요약 결과")
-            st.write(summary)
+        st.markdown("### ✅ 요약 결과")
+        st.write(summary)
 
 else:
     st.info("좌측 사이드바에서 Brastemp, Electrolux 데이터를 업로드하세요.")
