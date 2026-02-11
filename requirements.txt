@@ -6,3 +6,4 @@ scikit-learn
 langchain
 langchain-openai
 openai
+bar_chart_race 
