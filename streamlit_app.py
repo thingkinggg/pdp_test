@@ -3,44 +3,47 @@ import pandas as pd
 import bar_chart_race as bcr
 import tempfile
 
-st.set_page_config(page_title="Excel Bar Chart Race", layout="wide")
+st.title("📊 부서별 실적 바 차트 레이스")
 
-st.title("📊 엑셀 데이터 바 차트 레이스")
-st.write("엑셀 파일을 업로드하면 시간에 따른 순위 변화를 애니메이션으로 보여줍니다.")
-
-# 1. 파일 업로드
-uploaded_file = st.file_uploader("엑셀 파일을 선택하세요 (.xlsx)", type=["xlsx"])
+uploaded_file = st.file_uploader("엑셀 파일을 업로드하세요", type=["xlsx"])
 
 if uploaded_file:
-    # 데이터 로드
     df = pd.read_excel(uploaded_file)
     
-    # 첫 번째 열을 인덱스(시간축)로 설정
-    time_col = df.columns[0]
-    df = df.set_index(time_col)
-    
-    st.subheader("📌 업로드된 데이터 미리보기")
-    st.dataframe(df.head())
+    try:
+        # 1. 데이터 타입 강제 변환 (숫자가 아닌 것은 NaN으로, 그 후 0으로 채움)
+        df['실적'] = pd.to_numeric(df['실적'], errors='coerce').fillna(0)
+        
+        # 2. 피벗 테이블 생성 (Long -> Wide)
+        df_reshaped = df.pivot(index='년도', columns='부서', values='실적')
+        
+        # 3. 인덱스(년도) 정렬
+        df_reshaped = df_reshaped.sort_index()
 
-    if st.button("애니메이션 생성 시작"):
-        with st.spinner("비디오를 생성 중입니다. 잠시만 기다려 주세요..."):
-            # 임시 파일 경로 설정 (비디오 저장용)
-            with tempfile.NamedTemporaryFile(delete=False, suffix='.mp4') as tmpfile:
-                # 바 차트 레이스 생성
-                bcr.bar_chart_race(
-                    df=df,
-                    filename=tmpfile.name,
-                    orientation='h',
-                    sort='desc',
-                    n_bars=10,
-                    fixed_max=True,
-                    steps_per_period=10,
-                    period_length=500,
-                    title=f'{time_col}별 변화 추이'
-                )
-                
-                # 비디오 재생
-                video_file = open(tmpfile.name, 'rb')
-                video_bytes = video_file.read()
-                st.video(video_bytes)
-                st.success("생성이 완료되었습니다!")
+        st.write("차트 생성 준비 완료:", df_reshaped.head())
+
+        if st.button("애니메이션 생성"):
+            with st.spinner("비디오 파일 변환 중... (데이터 양에 따라 1~2분 소요될 수 있습니다)"):
+                with tempfile.NamedTemporaryFile(delete=False, suffix='.mp4') as tmpfile:
+                    # n_bars는 부서 개수보다 많으면 안 됩니다.
+                    num_departments = len(df_reshaped.columns)
+                    
+                    bcr.bar_chart_race(
+                        df=df_reshaped,
+                        filename=tmpfile.name,
+                        title='연도별 부서 실적 변화',
+                        orientation='h',
+                        sort='desc',
+                        n_bars=min(10, num_departments), # 최대 10개 혹은 부서 수만큼
+                        fixed_max=True,
+                        steps_per_period=10, # 부드러운 전환을 위해 설정
+                        period_length=1000
+                    )
+                    
+                    video_file = open(tmpfile.name, 'rb')
+                    st.video(video_file.read())
+                    st.success("완료되었습니다!")
+
+    except Exception as e:
+        st.error(f"오류가 발생했습니다: {e}")
+        st.info("데이터 구조를 확인해주세요. (필수 열: 년도, 부서, 실적)")
