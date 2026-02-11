@@ -8,3 +8,4 @@ langchain-openai
 openai
 bar_chart_race 
 openpyxl
+ffmpeg
