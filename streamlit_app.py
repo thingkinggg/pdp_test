@@ -61,9 +61,3 @@ if uploaded_file:
             
     except Exception as e:
         st.error(f"파일을 읽는 중 오류가 발생했습니다: {e}")
-
-# 필요한 라이브러리 설치 안내
-st.sidebar.markdown("""
-### 🛠️ 필요한 라이브러리 설치
-```bash
-pip install streamlit pandas plotly openpyxl
