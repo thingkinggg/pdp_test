@@ -9,3 +9,4 @@ openai
 bar_chart_race 
 openpyxl
 ffmpeg
+plotly
